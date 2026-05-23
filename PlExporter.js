@@ -8,7 +8,6 @@
 
   window.__plexHistoryExporterRunning = true;
 
-  // ─────────────────────────────────────────────
   // UI Overlay
   // ─────────────────────────────────────────────
 
@@ -68,9 +67,7 @@
   const countElement =
     document.getElementById("plex-export-count");
 
-  // ─────────────────────────────────────────────
   // Storage
-  // ─────────────────────────────────────────────
 
   const collectedItems = new Map();
 
@@ -101,9 +98,7 @@
     updateCounter();
   }
 
-  // ─────────────────────────────────────────────
   // Recursive JSON Scanner
-  // ─────────────────────────────────────────────
 
   function scanObject(object) {
 
@@ -139,9 +134,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────
   // Fetch Interceptor
-  // ─────────────────────────────────────────────
 
   const originalFetch = window.fetch.bind(window);
 
@@ -168,9 +161,7 @@
     return response;
   };
 
-  // ─────────────────────────────────────────────
   // XMLHttpRequest Interceptor
-  // ─────────────────────────────────────────────
 
   const originalXHROpen =
     XMLHttpRequest.prototype.open;
@@ -208,17 +199,13 @@
     return originalXHRSend.apply(this, args);
   };
 
-  // ─────────────────────────────────────────────
   // Helpers
-  // ─────────────────────────────────────────────
 
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ─────────────────────────────────────────────
   // Auto Scroll
-  // ─────────────────────────────────────────────
 
   async function autoScroll() {
 
@@ -253,9 +240,7 @@
     }
   }
 
-  // ─────────────────────────────────────────────
   // Normalization
-  // ─────────────────────────────────────────────
 
   function normalizeItem(item) {
 
@@ -303,9 +288,7 @@
     };
   }
 
-  // ─────────────────────────────────────────────
   // CSV Generator
-  // ─────────────────────────────────────────────
 
   function generateCSV(rows) {
 
@@ -333,9 +316,7 @@
     ].join("\r\n");
   }
 
-  // ─────────────────────────────────────────────
   // File Download
-  // ─────────────────────────────────────────────
 
   function downloadCSV(content) {
 
@@ -366,9 +347,7 @@
     URL.revokeObjectURL(url);
   }
 
-  // ─────────────────────────────────────────────
   // Main
-  // ─────────────────────────────────────────────
 
   try {
 
