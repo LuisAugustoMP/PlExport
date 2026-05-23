@@ -1,22 +1,3 @@
-/**
- * PLEX HISTORY EXPORTER — v4
- * ============================================
- * Export your complete Plex watch history to CSV
- *
- * HOW TO USE:
- * 1. Open:
- *    https://watch.plex.tv/account/history
- *
- * 2. Wait for the page to fully load
- *
- * 3. Open DevTools:
- *    F12 → Console
- *
- * 4. Paste this script and press Enter
- *
- * The CSV file will download automatically.
- */
-
 (async () => {
 
   // Prevent multiple executions
