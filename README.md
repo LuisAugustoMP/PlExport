@@ -1,6 +1,6 @@
-# Plex History Exporter
+# Plex (Account) History Exporter
 
-Export your complete Plex watch history to CSV directly from the browser.
+Export your complete Plex Account watch history to CSV directly from the browser.
 
 This script automatically scrolls through the Plex history page, captures all loaded items, and downloads a CSV file containing your watched movies and episodes.
 
