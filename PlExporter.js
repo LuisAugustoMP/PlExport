@@ -69,6 +69,389 @@
       `${collectedItems.size} items collected`;
   }
 
+  function getItemId(item) {
+    return (
+      item.id ||
+      item.ratingKey ||
+      item.guid ||
+      item.url ||
+      item.link?.url ||
+      [
+        item.title,
+        item.grandparentTitle,
+        item.year,
+        item.viewedAt,
+        item.lastViewedAt
+      ].join("_")
+    );
+  }
+
+  function addItems(items) {
+    if (!Array.isArray(items)) return;
+
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+
+      const looksLikeMedia =
+        item.title ||
+        item.grandparentTitle ||
+        item.ratingKey ||
+        item.guid ||
+        item.type ||
+        item.link?.url;
+
+      if (!looksLikeMedia) continue;
+
+      const id = getItemId(item);
+
+      if (!collectedItems.has(id)) {
+        collectedItems.set(id, item);
+      }
+    }
+
+    updateCounter();
+  }
+
+  function scanObject(obj) {
+    if (!obj || typeof obj !== "object") return;
+
+    if (Array.isArray(obj)) {
+      addItems(obj);
+
+      for (const item of obj) {
+        scanObject(item);
+      }
+
+      return;
+    }
+
+    for (const key in obj) {
+      scanObject(obj[key]);
+    }
+  }
+
+  function extractInitialItemsFromDOM() {
+    const rows = [
+      ...document.querySelectorAll("a[href*='/movie/'], a[href*='/show/']")
+    ];
+
+    const items = [];
+
+    for (const row of rows) {
+      const container =
+        row.closest("div[class]") || row.parentElement;
+
+      const text =
+        container?.innerText || "";
+
+      const href =
+        row.getAttribute("href") || "";
+
+      const img =
+        container?.querySelector("img");
+
+      const lines = text
+        .split("\n")
+        .map(v => v.trim())
+        .filter(Boolean);
+
+      if (!lines.length) continue;
+
+      const title = lines[0] || "";
+
+      let subtitle = "";
+      let watchedAt = "";
+
+      if (lines[1]) subtitle = lines[1];
+      if (lines[2]) watchedAt = lines[2];
+
+      items.push({
+        title,
+        subtitle,
+        watchedAt,
+        url: href,
+        thumb: img?.src || ""
+      });
+    }
+
+    addItems(items);
+  }
+
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+
+    try {
+      const clone = response.clone();
+
+      const contentType =
+        clone.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        const json = await clone.json();
+        scanObject(json);
+      }
+    } catch (_) {}
+
+    return response;
+  };
+
+  const originalXHROpen =
+    XMLHttpRequest.prototype.open;
+
+  const originalXHRSend =
+    XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function (...args) {
+    return originalXHROpen.apply(this, args);
+  };
+
+  XMLHttpRequest.prototype.send = function (...args) {
+    this.addEventListener("load", function () {
+      try {
+        const contentType =
+          this.getResponseHeader("content-type") || "";
+
+        if (contentType.includes("application/json")) {
+          const json = JSON.parse(this.responseText);
+          scanObject(json);
+        }
+      } catch (_) {}
+    });
+
+    return originalXHRSend.apply(this, args);
+  };
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function autoScroll() {
+    let previousCount = collectedItems.size;
+    let stableIterations = 0;
+
+    while (stableIterations < 8) {
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+      });
+
+      await sleep(1800);
+
+      if (collectedItems.size === previousCount) {
+        stableIterations++;
+      } else {
+        stableIterations = 0;
+      }
+
+      previousCount = collectedItems.size;
+
+      progressElement.style.width =
+        `${Math.min(95, ((stableIterations + 1) / 8) * 100)}%`;
+
+      statusElement.textContent =
+        "Loading additional history items...";
+    }
+  }
+
+  function normalizeThumbnail(url) {
+    if (!url) return "";
+
+    if (url.includes("image.tmdb.org")) {
+      return url
+        .replace("/original/", "/w1920/")
+        .replace("/w500/", "/w1920/")
+        .replace("/w780/", "/w1920/")
+        .replace("/w1280/", "/w1920/");
+    }
+
+    return url;
+  }
+
+  function normalizeItem(item) {
+    const url =
+      item.url ||
+      item.link?.url ||
+      "";
+
+    const isEpisode =
+      url.includes("/season/") ||
+      item.subtitle?.includes("E");
+
+    let type = "movie";
+
+    if (isEpisode) {
+      type = "episode";
+    }
+
+    let year = "";
+
+    if (!isEpisode) {
+      year =
+        item.year ||
+        item.subtitle?.match(/\d{4}/)?.[0] ||
+        "";
+    }
+
+    return {
+      id: getItemId(item),
+
+      title:
+        item.title ||
+        item.grandparentTitle ||
+        "",
+
+      type,
+
+      year,
+
+      watched_at:
+        item.viewedAt ||
+        item.lastViewedAt ||
+        item.watchedAt ||
+        item.date ||
+        item.watchedAtISO ||
+        "",
+
+      thumbnail:
+        normalizeThumbnail(
+          item.thumb ||
+          item.image?.url ||
+          ""
+        ),
+
+      plex_url:
+        url.startsWith("http")
+          ? url
+          : `https://watch.plex.tv${url}`
+    };
+  }
+
+  function generateCSV(rows) {
+    const fields = [
+      "id",
+      "title",
+      "type",
+      "year",
+      "watched_at",
+      "thumbnail",
+      "plex_url"
+    ];
+
+    const escapeValue = value =>
+      `"${String(value ?? "")
+        .replace(/"/g, '""')}"`;
+
+    return [
+      fields.join(","),
+      ...rows.map(row =>
+        fields
+          .map(field => escapeValue(row[field]))
+          .join(",")
+      )
+    ].join("\r\n");
+  }
+
+  function downloadCSV(content) {
+    const blob = new Blob(
+      ["\uFEFF" + content],
+      {
+        type: "text/csv;charset=utf-8;"
+      }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `plex_history_${new Date()
+        .toISOString()
+        .slice(0,10)}.csv`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  }
+
+  try {
+    statusElement.textContent =
+      "Capturing visible items...";
+
+    extractInitialItemsFromDOM();
+
+    await sleep(1000);
+
+    statusElement.textContent =
+      "Loading additional history items...";
+
+    await autoScroll();
+
+    if (collectedItems.size === 0) {
+      throw new Error(
+        "No history items were captured."
+      );
+    }
+
+    statusElement.textContent =
+      "Generating CSV file...";
+
+    progressElement.style.width = "100%";
+
+    const rows =
+      [...collectedItems.values()]
+        .map(normalizeItem)
+        .filter(row => row.title);
+
+    downloadCSV(generateCSV(rows));
+
+    console.log(
+      `✅ Export completed: ${rows.length} items`
+    );
+
+    statusElement.textContent =
+      `Export completed (${rows.length} items)`;
+
+    await sleep(2500);
+
+    overlay.remove();
+
+  } catch (error) {
+
+    console.error(
+      "Plex History Exporter:",
+      error
+    );
+
+    statusElement.textContent =
+      "Export failed";
+
+    countElement.textContent =
+      error.message;
+
+  } finally {
+
+    window.fetch = originalFetch;
+
+    XMLHttpRequest.prototype.open =
+      originalXHROpen;
+
+    XMLHttpRequest.prototype.send =
+      originalXHRSend;
+
+    window.__plexHistoryExporterRunning = false;
+  }
+
+})();      `${collectedItems.size} items collected`;
+  }
+
   function addItems(items) {
     if (!Array.isArray(items)) return;
 
