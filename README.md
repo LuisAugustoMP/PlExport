@@ -74,21 +74,13 @@ The script will:
 | Field | Description |
 |---|---|
 | id | Plex internal item ID |
-| titulo | Movie or episode title |
-| tipo | Movie or episode |
-| ano | Release year |
-| assistido_em | Watched date |
-| thumb | Thumbnail/poster URL |
+| title | Movie or episode title |
+| type | Movie or episode |
+| year | Release year |
+| watched_at | Watched date |
+| thumbnail | Thumbnail/poster URL |
+| plex_url | Plex internal URL |
 
----
-
-## Example Output
-
-```csv
-id,titulo,tipo,ano,assistido_em
-12345,Interstellar,movie,2014,2026-05-21
-67890,Breaking Bad,episode,2008,2026-05-20
-```
 
 ---
 
