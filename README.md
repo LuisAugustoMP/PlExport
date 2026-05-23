@@ -1,8 +1,8 @@
 # Plex (Account) History Exporter
 
-Export your complete Plex Account watch history to CSV directly from the browser.
+Export your complete Plex watch history to CSV directly from the browser.
 
-This script automatically scrolls through the Plex history page, captures all loaded items, and downloads a CSV file containing your watched movies and episodes.
+This script automatically scrolls through the Plex history page, captures all loaded items, extracts the original TMDB poster URLs in high quality (`w1920`), and downloads everything as a CSV file.
 
 ---
 
@@ -10,8 +10,10 @@ This script automatically scrolls through the Plex history page, captures all lo
 
 - Export full Plex watch history
 - Automatic infinite scroll handling
-- CSV download
+- Captures already-visible items on page load
+- CSV export
 - Movies and TV episodes support
+- High-quality TMDB thumbnails (`w1920`)
 - No API key required
 - Works entirely in the browser
 - No data sent anywhere
@@ -21,6 +23,8 @@ This script automatically scrolls through the Plex history page, captures all lo
 ## How It Works
 
 The script intercepts the same network requests used internally by Plex while you browse your watch history.
+
+It also extracts the items already rendered on the page before scrolling, ensuring the first visible entries are not missed.
 
 All processing happens locally in your browser.
 
@@ -54,18 +58,25 @@ Then open the **Console** tab.
 
 ### 3. Paste the Script
 
-Copy the exporter script (**PlExporter.js**) and paste it into the Console. Press Enter
+Copy the contents of:
+
+```txt
+PlExporter.js
+```
+
+Paste it into the Console and press Enter.
 
 ---
 
 ### 4. Wait for Export
 
-The script will:
+The script will automatically:
 
-- scroll through your entire history
-- collect all items
+- capture the already visible items
+- scroll through your full history
+- collect all loaded entries
 - generate a CSV file
-- automatically download it
+- download it automatically
 
 ---
 
@@ -75,12 +86,25 @@ The script will:
 |---|---|
 | id | Plex internal item ID |
 | title | Movie or episode title |
-| type | Movie or episode |
+| type | `movie` or `episode` |
 | year | Release year |
 | watched_at | Watched date |
-| thumbnail | Thumbnail/poster URL |
-| plex_url | Plex internal URL |
+| thumbnail | High-quality TMDB poster URL (`w1920`) |
+| plex_url | Plex page URL |
 
+---
+
+## Thumbnail Quality
+
+The exporter automatically converts TMDB images to high-resolution `w1920` versions.
+
+Example:
+
+```txt
+https://image.tmdb.org/t/p/w1920/example.jpg
+```
+
+This avoids broken Plex proxy URLs and provides consistent high-quality posters.
 
 ---
 
@@ -90,14 +114,20 @@ This tool:
 
 - does NOT collect data
 - does NOT send information anywhere
-- does NOT require login credentials
+- does NOT require API keys
+- does NOT require credentials
 - runs entirely locally in your browser
 
 ---
 
 ## Limitations
 
-Because Plex is a web application that changes over time, this exporter may break if Plex changes their internal APIs or page structure.
+Because Plex is a web application that changes over time, this exporter may stop working if Plex changes:
+
+- internal APIs
+- request formats
+- page structure
+- history rendering behavior
 
 ---
 
@@ -120,10 +150,12 @@ Feel free to use, modify, and distribute.
 - JSON export
 - Letterboxd export
 - Trakt sync
+- IMDb export
 - Tampermonkey version
 - Chrome extension
-- Metadata enrichment
 - Watch statistics dashboard
+- Duplicate watch detection
+- Watch time analytics
 
 ---
 
