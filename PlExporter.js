@@ -1,15 +1,10 @@
 (async () => {
-
-  // Prevent multiple executions
   if (window.__plexHistoryExporterRunning) {
     console.warn("Plex History Exporter is already running.");
     return;
   }
 
   window.__plexHistoryExporterRunning = true;
-
-  // UI Overlay
-  // ─────────────────────────────────────────────
 
   const overlay = document.createElement("div");
 
@@ -67,8 +62,6 @@
   const countElement =
     document.getElementById("plex-export-count");
 
-  // Storage
-
   const collectedItems = new Map();
 
   function updateCounter() {
@@ -77,17 +70,16 @@
   }
 
   function addItems(items) {
-
     if (!Array.isArray(items)) return;
 
     for (const item of items) {
-
       if (!item || typeof item !== "object") continue;
 
       const id =
         item.id ||
         item.ratingKey ||
         item.guid ||
+        item.url ||
         crypto.randomUUID();
 
       if (!collectedItems.has(id)) {
@@ -98,70 +90,88 @@
     updateCounter();
   }
 
-  // Recursive JSON Scanner
-
   function scanObject(object) {
-
     if (!object || typeof object !== "object") return;
 
-    for (const key in object) {
+    if (Array.isArray(object)) {
+      addItems(object);
 
-      const value = object[key];
-
-      if (Array.isArray(value)) {
-
-        if (
-          value.length > 0 &&
-          typeof value[0] === "object"
-        ) {
-
-          const sample = value[0];
-
-          const looksLikeMedia =
-            sample.title ||
-            sample.type ||
-            sample.guid ||
-            sample.ratingKey;
-
-          if (looksLikeMedia) {
-            addItems(value);
-          }
-        }
-
-      } else if (typeof value === "object") {
-        scanObject(value);
+      for (const item of object) {
+        scanObject(item);
       }
+
+      return;
+    }
+
+    for (const key in object) {
+      scanObject(object[key]);
     }
   }
 
-  // Fetch Interceptor
+  function scanInitialData() {
+    try {
+      const scripts = [...document.querySelectorAll("script")];
+
+      for (const script of scripts) {
+        const text = script.textContent || "";
+
+        if (
+          text.includes("watchHistory") ||
+          text.includes("ratingKey") ||
+          text.includes("grandparentTitle")
+        ) {
+          const matches = text.match(/\{.*\}/gs);
+
+          if (!matches) continue;
+
+          for (const match of matches) {
+            try {
+              const json = JSON.parse(match);
+              scanObject(json);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const html = document.documentElement.innerHTML;
+
+      const regex =
+        /"ratingKey"|\"grandparentTitle\"|\"watchHistory\"/;
+
+      if (regex.test(html)) {
+        const jsonMatches = html.match(/\{[\s\S]*?\}/g) || [];
+
+        for (const block of jsonMatches) {
+          try {
+            const json = JSON.parse(block);
+            scanObject(json);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
 
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (...args) => {
-
     const response = await originalFetch(...args);
 
     try {
-
       const clone = response.clone();
 
       const contentType =
         clone.headers.get("content-type") || "";
 
       if (contentType.includes("application/json")) {
-
         const json = await clone.json();
-
         scanObject(json);
       }
-
     } catch (_) {}
 
     return response;
   };
-
-  // XMLHttpRequest Interceptor
 
   const originalXHROpen =
     XMLHttpRequest.prototype.open;
@@ -170,80 +180,58 @@
     XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (...args) {
-
-    this.__url = args[1];
-
     return originalXHROpen.apply(this, args);
   };
 
   XMLHttpRequest.prototype.send = function (...args) {
-
     this.addEventListener("load", function () {
-
       try {
-
         const contentType =
           this.getResponseHeader("content-type") || "";
 
         if (contentType.includes("application/json")) {
-
           const json = JSON.parse(this.responseText);
-
           scanObject(json);
         }
-
       } catch (_) {}
-
     });
 
     return originalXHRSend.apply(this, args);
   };
 
-  // Helpers
-
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // Auto Scroll
-
   async function autoScroll() {
-
-    let lastHeight = 0;
+    let lastCount = collectedItems.size;
     let stableIterations = 0;
 
-    while (stableIterations < 10) {
-
+    while (stableIterations < 8) {
       window.scrollTo({
         top: document.body.scrollHeight,
         behavior: "smooth"
       });
 
-      await sleep(1500);
+      await sleep(1800);
 
-      const currentHeight =
-        document.body.scrollHeight;
-
-      if (currentHeight === lastHeight) {
+      if (collectedItems.size === lastCount) {
         stableIterations++;
       } else {
         stableIterations = 0;
       }
 
-      lastHeight = currentHeight;
+      lastCount = collectedItems.size;
 
       progressElement.style.width =
-        `${Math.min(95, stableIterations * 10)}%`;
+        `${Math.min(95, (stableIterations / 8) * 100)}%`;
 
       statusElement.textContent =
         "Loading additional history items...";
     }
   }
 
-  // Normalization
-
   function normalizeItem(item) {
-
     const type =
       item.type ||
       item.metadataType ||
@@ -253,10 +241,10 @@
       item.viewedAt ||
       item.lastViewedAt ||
       item.date ||
+      item.viewedAtISO ||
       "";
 
     return {
-
       id:
         item.id ||
         item.ratingKey ||
@@ -288,10 +276,7 @@
     };
   }
 
-  // CSV Generator
-
   function generateCSV(rows) {
-
     const fields = [
       "id",
       "title",
@@ -316,10 +301,7 @@
     ].join("\r\n");
   }
 
-  // File Download
-
   function downloadCSV(content) {
-
     const blob = new Blob(
       ["\uFEFF" + content],
       {
@@ -347,20 +329,22 @@
     URL.revokeObjectURL(url);
   }
 
-  // Main
-
   try {
+    statusElement.textContent =
+      "Scanning existing page data...";
+
+    scanInitialData();
+
+    await sleep(1000);
 
     statusElement.textContent =
-      "Preparing export...";
-
-    await sleep(1500);
+      "Loading additional history items...";
 
     await autoScroll();
 
     if (collectedItems.size === 0) {
       throw new Error(
-        "No history items were captured. Try refreshing the page and running the script again."
+        "No history items were captured."
       );
     }
 
@@ -371,7 +355,8 @@
 
     const normalizedRows =
       [...collectedItems.values()]
-        .map(normalizeItem);
+        .map(normalizeItem)
+        .filter(row => row.title);
 
     downloadCSV(
       generateCSV(normalizedRows)
@@ -403,7 +388,6 @@
 
   } finally {
 
-    // Restore original functions
     window.fetch = originalFetch;
 
     XMLHttpRequest.prototype.open =
